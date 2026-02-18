@@ -20,10 +20,17 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import fr.caensup.gpsdemo.ui.theme.GPSDemoTheme
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polygon
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,6 +68,83 @@ fun LocationPermissionGate(
 }
 
 
+
+fun addCircle(
+    mapView: MapView,
+    latitude: Double,
+    longitude: Double,
+    radiusMeters: Double
+): Polygon {
+    val center = GeoPoint(latitude, longitude)
+
+    val circle = Polygon().apply {
+        // Génère une liste de points qui approximent un cercle (géodésique simple)
+        points = Polygon.pointsAsCircle(center, radiusMeters)
+
+        // Style
+        outlinePaint.color = android.graphics.Color.RED
+        outlinePaint.strokeWidth = 2f
+
+        title = "Zone d'intérêt"
+    }
+
+    mapView.overlays.add(circle)
+    mapView.invalidate()
+    return circle
+}
+
+
+
+fun addMarker(map: MapView, lat: Double, lng: Double, title: String, snippet: String) {
+    val marker = Marker(map).apply {
+        position = GeoPoint(lat, lng)
+        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        this.title = title
+        this.snippet = snippet
+    }
+    map.overlays.add(marker)
+    map.invalidate()
+}
+
+
+@Composable
+fun OsmMapBasic(
+    modifier: Modifier = Modifier.fillMaxSize(),
+    centerLat: Double,
+    centerLng: Double,
+    zoom: Double = 15.0,
+    title: String,
+    snippet: String
+) {
+    val context = LocalContext.current
+
+    AndroidView(
+        modifier = modifier,
+        factory = {
+            MapView(context).apply {
+                setTileSource(TileSourceFactory.MAPNIK) // tuiles OSM "classiques"
+                setMultiTouchControls(true)
+                controller.setZoom(zoom)
+                controller.setCenter(GeoPoint(centerLat, centerLng))
+                addMarker( this, centerLat, centerLng, title, snippet)
+                addCircle(  this, centerLat, centerLng, 50.0)
+                TapToPolylineController(context, this).enable()
+            }
+        },
+        update = { map ->
+            // Recentrage si paramètres changent
+            map.controller.setZoom(zoom)
+            map.controller.setCenter(GeoPoint(centerLat, centerLng))
+            addMarker( map, centerLat, centerLng, title, snippet)
+            addCircle(  map, centerLat, centerLng, 50.0)
+
+        }
+    )
+}
+
+
+
+
 @Composable
 fun LocationOnceScreen(vm: LocationViewModel) {
     val state by vm.state.collectAsState()
@@ -86,5 +170,12 @@ fun LocationOnceScreen(vm: LocationViewModel) {
 
         Spacer(Modifier.height(12.dp))
         Button(onClick = vm::refreshOnce) { Text("Rafraîchir") }
+        Spacer(Modifier.height(12.dp))
+        // Visualiser une carte OSM avec la position actuelle
+        if (state.latitude != null && state.longitude != null) {
+            OsmMapBasic( centerLat = state.latitude!!, centerLng = state.longitude!!, zoom = 20.0, title = "CAENSUP!", snippet = "Fabrique à Techos")
+        }
+
+
     }
 }

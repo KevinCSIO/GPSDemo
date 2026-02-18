@@ -1,0 +1,68 @@
+package fr.caensup.gpsdemo
+
+import android.content.Context
+import android.view.MotionEvent
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Overlay
+import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.util.Distance
+
+class TapToPolylineController(
+    private val context: Context,
+    private val mapView: MapView,
+) {
+
+    val points: MutableList<GeoPoint> = mutableListOf()
+
+    private val polyline: Polyline = Polyline(mapView).apply {
+        // Style optionnel
+        // outlinePaint.color = Color.RED
+        // outlinePaint.strokeWidth = 8f
+    }
+
+    private val tapOverlay = object : Overlay() {
+        override fun onSingleTapConfirmed(e: MotionEvent, mapView: MapView): Boolean {
+            val p = mapView.projection.fromPixels(e.x.toInt(), e.y.toInt()) as GeoPoint
+            points.add(p)
+
+            // Mettre à jour la polyline
+            polyline.setPoints(points)
+            if (!mapView.overlays.contains(polyline)) {
+                mapView.overlays.add(polyline)
+            }
+
+            mapView.invalidate()
+            return true // on consomme l'évènement
+        }
+
+        // Si vous voulez aussi gérer un appui long :
+        // override fun onLongPress(e: MotionEvent, mapView: MapView): Boolean { ... }
+    }
+
+    fun enable() {
+        // Mettre l'overlay en tête pour capter les taps avant d'autres overlays
+        mapView.overlays.add(0, tapOverlay)
+    }
+
+    fun disable() {
+        mapView.overlays.remove(tapOverlay)
+    }
+
+    fun clear() {
+        points.clear()
+        polyline.setPoints(points)
+        mapView.invalidate()
+    }
+
+    /**
+     * Distance totale de la polyline (en mètres)
+     */
+    fun totalDistanceMeters(): Double {
+        var total = 0.0
+        for (i in 0 until points.size - 1) {
+            total += points[i].distanceToAsDouble( points[i + 1])
+        }
+        return total
+    }
+}

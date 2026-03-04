@@ -7,21 +7,23 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -37,9 +39,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-             LocationOnceScreen(
-                 vm = LocationViewModel(
-                     FusedLocationRepository( this)) )
+            GPSDemoTheme {
+                LocationOnceScreen(
+                    vm = LocationViewModel(
+                        FusedLocationRepository(this)
+                    )
+                )
+            }
         }
     }
 }
@@ -53,7 +59,7 @@ fun LocationPermissionGate(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted -> onPermissionResult(granted) }
 
-    Column(Modifier.padding(16.dp)) {
+    Column(Modifier.padding(16.dp).safeDrawingPadding()) {
         Text("Localisation : permission requise")
         Spacer(Modifier.height(8.dp))
         Button(onClick = { launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION) }) {
@@ -154,28 +160,47 @@ fun LocationOnceScreen(vm: LocationViewModel) {
         return
     }
 
-    Column(Modifier.padding(16.dp)) {
-        Text("Dernière position connue")
-        Spacer(Modifier.height(8.dp))
-
-        Text("Lat: ${state.latitude ?: "-"}")
-        Text("Lng: ${state.longitude ?: "-"}")
-        Text("Accuracy: ${state.accuracyMeters?.let { "$it m" } ?: "-"}")
-        Text("Provider: ${state.provider ?: "-"}")
-
-        state.message?.let {
+    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+        // Zone du haut avec les coordonnées et le bouton
+        Column(Modifier.padding(16.dp)) {
+            Text("Dernière position connue", fontSize = 18.sp)
             Spacer(Modifier.height(8.dp))
-            Text(it, color = Color(0xFFFFCC66))
+
+            Text("Lat: ${state.latitude ?: "-"}")
+            Text("Lng: ${state.longitude ?: "-"}")
+            Text("Accuracy: ${state.accuracyMeters?.let { "$it m" } ?: "-"}")
+            Text("Provider: ${state.provider ?: "-"}")
+
+            state.message?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, color = Color(0xFFFFCC66))
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = vm::refreshOnce) { Text("Rafraîchir") }
         }
 
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = vm::refreshOnce) { Text("Rafraîchir") }
-        Spacer(Modifier.height(12.dp))
-        // Visualiser une carte OSM avec la position actuelle
-        if (state.latitude != null && state.longitude != null) {
-            OsmMapBasic( centerLat = state.latitude!!, centerLng = state.longitude!!, zoom = 20.0, title = "CAENSUP!", snippet = "Fabrique à Techos")
+        // Boîte pour la carte qui prend tout le reste de l'écran
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clipToBounds() // Empêche la carte de déborder visuellement ou lors des interactions
+        ) {
+            // Visualiser une carte OSM avec la position actuelle
+            if (state.latitude != null && state.longitude != null) {
+                OsmMapBasic(
+                    modifier = Modifier.fillMaxSize(),
+                    centerLat = state.latitude!!,
+                    centerLng = state.longitude!!,
+                    zoom = 20.0,
+                    title = "CAENSUP!",
+                    snippet = "Fabrique à Techos"
+                )
+            } else {
+                // Optionnel : un message si la position n'est pas encore dispo
+                Text("En attente de position...", modifier = Modifier.padding(16.dp))
+            }
         }
-
-
     }
 }

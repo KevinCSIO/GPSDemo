@@ -6,19 +6,18 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polyline
-import org.osmdroid.util.Distance
 
 class TapToPolylineController(
     private val context: Context,
     private val mapView: MapView,
+    private val onDistanceChanged: (Double) -> Unit = {}
 ) {
 
     val points: MutableList<GeoPoint> = mutableListOf()
 
     private val polyline: Polyline = Polyline(mapView).apply {
-        // Style optionnel
-        // outlinePaint.color = Color.RED
-        // outlinePaint.strokeWidth = 8f
+        outlinePaint.color = android.graphics.Color.RED
+        outlinePaint.strokeWidth = 8f
     }
 
     private val tapOverlay = object : Overlay() {
@@ -33,19 +32,20 @@ class TapToPolylineController(
             }
 
             mapView.invalidate()
+            onDistanceChanged(totalDistanceMeters())
             return true // on consomme l'évènement
         }
-
-        // Si vous voulez aussi gérer un appui long :
-        // override fun onLongPress(e: MotionEvent, mapView: MapView): Boolean { ... }
     }
 
     fun enable() {
-        // Mettre l'overlay en tête pour capter les taps avant d'autres overlays
-        mapView.overlays.add(0, tapOverlay)
+        if (!mapView.overlays.contains(tapOverlay)) {
+            // Mettre l'overlay en tête pour capter les taps avant d'autres overlays
+            mapView.overlays.add(0, tapOverlay)
+        }
     }
 
     fun disable() {
+        clear()
         mapView.overlays.remove(tapOverlay)
     }
 
@@ -53,6 +53,7 @@ class TapToPolylineController(
         points.clear()
         polyline.setPoints(points)
         mapView.invalidate()
+        onDistanceChanged(0.0)
     }
 
     /**
@@ -61,7 +62,7 @@ class TapToPolylineController(
     fun totalDistanceMeters(): Double {
         var total = 0.0
         for (i in 0 until points.size - 1) {
-            total += points[i].distanceToAsDouble( points[i + 1])
+            total += points[i].distanceToAsDouble(points[i + 1])
         }
         return total
     }

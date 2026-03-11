@@ -8,20 +8,26 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -37,9 +43,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-             LocationOnceScreen(
-                 vm = LocationViewModel(
-                     FusedLocationRepository( this)) )
+            GPSDemoTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    Column(modifier = Modifier.padding(innerPadding)) {
+                        LocationOnceScreen(
+                            vm = LocationViewModel(
+                                FusedLocationRepository(this@MainActivity)
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -68,7 +82,6 @@ fun LocationPermissionGate(
 }
 
 
-
 fun addCircle(
     mapView: MapView,
     latitude: Double,
@@ -78,13 +91,9 @@ fun addCircle(
     val center = GeoPoint(latitude, longitude)
 
     val circle = Polygon().apply {
-        // Génère une liste de points qui approximent un cercle (géodésique simple)
         points = Polygon.pointsAsCircle(center, radiusMeters)
-
-        // Style
         outlinePaint.color = android.graphics.Color.RED
         outlinePaint.strokeWidth = 2f
-
         title = "Zone d'intérêt"
     }
 
@@ -92,7 +101,6 @@ fun addCircle(
     mapView.invalidate()
     return circle
 }
-
 
 
 fun addMarker(map: MapView, lat: Double, lng: Double, title: String, snippet: String) {
@@ -114,40 +122,55 @@ fun OsmMapBasic(
     centerLng: Double,
     zoom: Double = 15.0,
     title: String,
-    snippet: String
+    snippet: String,
+    isDrawingEnabled: Boolean,
+    onDistanceChanged: (Double) -> Unit
 ) {
     val context = LocalContext.current
+    val mapView = remember { MapView(context) }
+    val controller = remember {
+        TapToPolylineController(context, mapView, onDistanceChanged)
+    }
+
+    LaunchedEffect(isDrawingEnabled) {
+        if (isDrawingEnabled) {
+            controller.enable()
+        } else {
+            controller.disable()
+        }
+    }
 
     AndroidView(
         modifier = modifier,
         factory = {
-            MapView(context).apply {
-                setTileSource(TileSourceFactory.MAPNIK) // tuiles OSM "classiques"
+            mapView.apply {
+                setTileSource(TileSourceFactory.MAPNIK)
                 setMultiTouchControls(true)
-                controller.setZoom(zoom)
-                controller.setCenter(GeoPoint(centerLat, centerLng))
-                addMarker( this, centerLat, centerLng, title, snippet)
-                addCircle(  this, centerLat, centerLng, 50.0)
-                TapToPolylineController(context, this).enable()
+                getController().setZoom(zoom)
+                getController().setCenter(GeoPoint(centerLat, centerLng))
+                addMarker(this, centerLat, centerLng, title, snippet)
+                addCircle(this, centerLat, centerLng, 50.0)
             }
         },
         update = { map ->
-            // Recentrage si paramètres changent
             map.controller.setZoom(zoom)
             map.controller.setCenter(GeoPoint(centerLat, centerLng))
-            addMarker( map, centerLat, centerLng, title, snippet)
-            addCircle(  map, centerLat, centerLng, 50.0)
-
         }
     )
 }
 
 
-
-
 @Composable
 fun LocationOnceScreen(vm: LocationViewModel) {
     val state by vm.state.collectAsState()
+
+    // modeDessin indique si on est en mode dessin ou non pour dessiner sur la carte
+    // modeDessin est un état mutable qui est initialisé à false
+    // modeDessin est déclaré avec by remember qui permet de garder l'état même après la recomposition
+
+
+    var modeDessin by remember { mutableStateOf(false) }
+    var totalDistance by remember { mutableStateOf(0.0) }
 
     if (!state.permissionGranted) {
         LocationPermissionGate(onPermissionResult = vm::onPermission)
@@ -169,13 +192,34 @@ fun LocationOnceScreen(vm: LocationViewModel) {
         }
 
         Spacer(Modifier.height(12.dp))
-        Button(onClick = vm::refreshOnce) { Text("Rafraîchir") }
-        Spacer(Modifier.height(12.dp))
-        // Visualiser une carte OSM avec la position actuelle
-        if (state.latitude != null && state.longitude != null) {
-            OsmMapBasic( centerLat = state.latitude!!, centerLng = state.longitude!!, zoom = 20.0, title = "CAENSUP!", snippet = "Fabrique à Techos")
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(onClick = vm::refreshOnce) { Text("Rafraîchir") }
+            Spacer(Modifier.padding(8.dp))
+            Switch(
+                checked = modeDessin,
+                onCheckedChange = { modeDessin = it }
+            )
+            Spacer(Modifier.padding(4.dp))
+            Text("Tracer")
         }
+        
+        Text("Distance : %.2f m".format(totalDistance))
 
+        Spacer(Modifier.height(12.dp))
 
+        if (state.latitude != null && state.longitude != null) {
+            OsmMapBasic(
+                centerLat = state.latitude!!,
+                centerLng = state.longitude!!,
+                zoom = 20.0,
+                title = "CAENSUP!",
+                snippet = "Fabrique à Techos",
+                isDrawingEnabled = modeDessin,
+                onDistanceChanged = { totalDistance = it }
+            )
+        }
     }
 }

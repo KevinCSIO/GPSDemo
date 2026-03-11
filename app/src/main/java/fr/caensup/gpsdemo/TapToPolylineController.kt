@@ -32,6 +32,9 @@ class TapToPolylineController(
             }
 
             mapView.invalidate()
+            // On appelle la fonction onDistanceChanged intiale avec la distance totale
+            // Comme totalDistance est mis à jour, puisque c'est un remember mutableState
+            // L'interface va être réactualisée
             onDistanceChanged(totalDistanceMeters())
             return true // on consomme l'évènement
         }

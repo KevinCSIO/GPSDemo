@@ -129,6 +129,8 @@ fun OsmMapBasic(
     val context = LocalContext.current
     val mapView = remember { MapView(context) }
     val controller = remember {
+        // Le on distanceChanged crée dans la fonction LocationOnceScreen est passé à la fonction OsmMapBasic
+        // est passé de nouveau en paramètre de la fonction TapToPolylineController
         TapToPolylineController(context, mapView, onDistanceChanged)
     }
 
@@ -167,9 +169,9 @@ fun LocationOnceScreen(vm: LocationViewModel) {
     // modeDessin indique si on est en mode dessin ou non pour dessiner sur la carte
     // modeDessin est un état mutable qui est initialisé à false
     // modeDessin est déclaré avec by remember qui permet de garder l'état même après la recomposition
-
-
     var modeDessin by remember { mutableStateOf(false) }
+
+    // idem pour totalDistance
     var totalDistance by remember { mutableStateOf(0.0) }
 
     if (!state.permissionGranted) {
@@ -218,6 +220,7 @@ fun LocationOnceScreen(vm: LocationViewModel) {
                 title = "CAENSUP!",
                 snippet = "Fabrique à Techos",
                 isDrawingEnabled = modeDessin,
+                // TotalDistance qui est un reùmember mutableStateOf est passé en paramètre de la fonction OsmMapBasic
                 onDistanceChanged = { totalDistance = it }
             )
         }
